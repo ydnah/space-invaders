@@ -7,6 +7,8 @@ pygame.font.init()
 
 # Game Varibles
 WIDTH, HEIGHT = 500, 500
+PLAYER_VEL = 5
+ENEMY_VEL = 1
 
 # Enemies
 CRAB = pygame.image.load(os.path.join("assets", "space__0002_B1.png"))
@@ -23,14 +25,33 @@ class Invaders:
     def __init__(self):
         self.player = Player((WIDTH // 2) - 15, HEIGHT - 100)
         self.display = pygame.display.set_mode((WIDTH, HEIGHT))
+        pygame.display.set_caption("Space Invaders")
         self.running = True
         self.score = 0
         self.level = 1
+        self.enemy_direction = 1
+        self.crab_array = []
+        self.populate_enemy()
 
     def check_event(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+
+    def update(self):
+        self.player.move()
+        self.move_enemies()
+
+    def move_enemies(self):
+        move_down = False
+        for enemy in self.crab_array:
+            enemy.x += ENEMY_VEL * self.enemy_direction
+            if enemy.x + enemy.get_width() >= WIDTH or enemy.x <= 0:
+                move_down = True
+        if move_down:
+            self.enemy_direction *= -1
+            for enemy in self.crab_array:
+                enemy.y += enemy.get_height()
 
     def render(self):
         self.display.fill((0, 0, 0))
@@ -43,7 +64,17 @@ class Invaders:
 
         self.player.draw(self.display)
 
+        for enemy in self.crab_array:
+            enemy.draw(self.display)
+
         pygame.display.flip()
+
+    def populate_enemy(self, count=11, start_x=20, start_y=50, spacing=30):
+        self.crab_array = []
+        for i in range(count):
+            x_position = start_x + i * spacing
+            y_positon = start_y
+            self.crab_array.append(Enemy(x_position, y_positon, CRAB))
 
 
 class Ship:
@@ -66,10 +97,37 @@ class Player(Ship):
         self.mask = pygame.mask.from_surface(self.ship_img)
         self.lives = 3
 
+    def move(self):
+        keys = pygame.key.get_pressed()
+
+        if keys[pygame.K_LEFT] and self.x - PLAYER_VEL > 0:
+            self.x -= PLAYER_VEL
+
+        if (
+            keys[pygame.K_RIGHT]
+            and self.x - PLAYER_VEL + self.ship_img.get_width() + 10 < WIDTH
+        ):
+            self.x += PLAYER_VEL
+
 
 class Enemy(Ship):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, x, y, enemy_type):
+        super().__init__(x, y)
+        self.ship_img = enemy_type
+        self.mask = pygame.mask.from_surface(self.ship_img)
+
+    def get_width(self):
+        return self.ship_img.get_width()
+
+    def get_height(self):
+        return self.ship_img.get_height()
+
+    def move(self):
+        if self.x - ENEMY_VEL + self.ship_img.get_width() + 10 < WIDTH:
+            self.x += ENEMY_VEL
+
+    def check_position(self):
+        pass
 
 
 def main():
@@ -79,8 +137,9 @@ def main():
     game = Invaders()
     while game.running:
         clock.tick(FPS)
-        game.render()
         game.check_event()
+        game.update()
+        game.render()
 
 
 if __name__ == "__main__":
