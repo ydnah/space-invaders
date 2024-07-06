@@ -15,7 +15,7 @@ ENEMY_Y_THRESHOLD = HEIGHT - 110
 
 # Enemy speed
 ENEMY_VEL_BASE = 0.2
-ENEMY_VEL_MAX = 3
+ENEMY_VEL_MAX = 2
 
 FPS = 60
 
@@ -67,9 +67,9 @@ class Invaders:
             sum(1 for enemy in row if not enemy.is_dead) for row in self.enemy_array
         )
         if remaining_enemies > 0:
-            enemy_velocity = ENEMY_VEL_BASE + (ENEMY_VEL_MAX - ENEMY_VEL_BASE) * (
-                1 - remaining_enemies / self.total_enemies
-            )
+            enemy_velocity = ENEMY_VEL_BASE + (
+                (ENEMY_VEL_MAX + self.level * 0.5) - ENEMY_VEL_BASE
+            ) * (1 - remaining_enemies / self.total_enemies)
         else:
             enemy_velocity = ENEMY_VEL_BASE
 
@@ -147,7 +147,7 @@ class Invaders:
     def enemy_shoot(self):
         for row in self.enemy_array:
             for enemy in row:
-                if enemy.shoot_chance():
+                if enemy.shoot_chance(self):
                     laser = Laser(
                         enemy.x + enemy.get_width(), enemy.y + enemy.get_height(), LASER
                     )
@@ -156,7 +156,7 @@ class Invaders:
     def move_enemy_lasers(self):
         for laser in self.enemy_laser_array:
             laser.move(-2)
-            if laser.off_screen(HEIGHT):
+            if laser.off_screen(HEIGHT - 80):
                 self.enemy_laser_array.remove(laser)
             elif laser.is_collision(self.player):
                 self.player.lives -= 1
@@ -287,8 +287,8 @@ class Enemy(Ship):
         if self.x - ENEMY_VEL_BASE + self.ship_img.get_width() + 10 < WIDTH:
             self.x += ENEMY_VEL_BASE
 
-    def shoot_chance(self):
-        if random.randrange(0, 110 * FPS) == 1:
+    def shoot_chance(self, game):
+        if random.randrange(0, 110 * FPS * game.level) == 1:
             return True
         return False
 
