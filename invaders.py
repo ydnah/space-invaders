@@ -7,9 +7,15 @@ pygame.init()
 pygame.font.init()
 
 # Game Varibles
-WIDTH, HEIGHT = 500, 500
+WIDTH, HEIGHT = 480, 540
 PLAYER_VEL = 5
-ENEMY_VEL = 1
+
+# End threshold
+ENEMY_Y_THRESHOLD = HEIGHT - 110
+
+# Enemy speed
+ENEMY_VEL_BASE = 0.2
+ENEMY_VEL_MAX = 3
 
 FPS = 60
 
@@ -34,6 +40,7 @@ class Invaders:
         self.level = 1
         self.enemy_direction = 1
         self.enemy_array = []
+        self.enemy_laser_array = []
         self.populate_enemy()
 
     def check_event(self):
@@ -44,16 +51,37 @@ class Invaders:
     def update(self):
         self.player.controls()
         self.move_enemies()
-        self.player.move_lasers(2, self.enemy_array)
+        self.player.move_lasers(6, self.enemy_array, self)
         self.clean_dead_enemies()
+        self.enemy_shoot()
+        self.move_enemy_lasers()
+        if self.player.lives == 0:
+            self.running = False
+
+        if not any(enemy for row in self.enemy_array for enemy in row):
+            self.level += 1
+            self.populate_enemy()
 
     def move_enemies(self):
+        remaining_enemies = sum(
+            sum(1 for enemy in row if not enemy.is_dead) for row in self.enemy_array
+        )
+        if remaining_enemies > 0:
+            enemy_velocity = ENEMY_VEL_BASE + (ENEMY_VEL_MAX - ENEMY_VEL_BASE) * (
+                1 - remaining_enemies / self.total_enemies
+            )
+        else:
+            enemy_velocity = ENEMY_VEL_BASE
+
         move_down = False
         for row in self.enemy_array:
             for enemy in row:
-                enemy.x += ENEMY_VEL * self.enemy_direction
+                enemy.x += enemy_velocity * self.enemy_direction
                 if enemy.x + enemy.get_width() >= WIDTH or enemy.x <= 0:
                     move_down = True
+                elif enemy.y + enemy.get_height() >= ENEMY_Y_THRESHOLD:
+                    self.running = False
+
         if move_down:
             self.enemy_direction *= -1
             for row in self.enemy_array:
@@ -73,33 +101,41 @@ class Invaders:
             self.display, (255, 255, 255), (0, HEIGHT - 70), (WIDTH, HEIGHT - 70), 2
         )
 
+        lives_label = self.main_font.render(f"{self.player.lives}", 1, (255, 255, 255))
+        self.display.blit(lives_label, (10, HEIGHT - 70))
+
         self.player.draw(self.display)
 
         for row in self.enemy_array:
             for enemy in row:
                 enemy.draw(self.display)
 
+        for laser in self.enemy_laser_array:
+            laser.draw(self.display)
+
         pygame.display.flip()
 
-    def populate_enemy(self, count=11, start_x=20, start_y=50, spacing=30):
+    def populate_enemy(self, count=11, start_x=20, start_y=80, spacing=30):
         self.enemy_array = []
         row = 0
 
         enemy_rows = [
-            (OCTOPUS, 1),
-            (CRAB, 2),
-            (SQUID, 2),
+            (OCTOPUS, 1, 40),
+            (CRAB, 2, 20),
+            (SQUID, 2, 10),
         ]
 
-        for enemy, rows in enemy_rows:
+        for enemy, rows, score_value in enemy_rows:
             for _ in range(rows):
                 inner_list = []
                 for i in range(count):
                     x_position = start_x + i * spacing
                     y_position = start_y + row * spacing
-                    inner_list.append(Enemy(x_position, y_position, enemy))
+                    inner_list.append(Enemy(x_position, y_position, enemy, score_value))
                 self.enemy_array.append(inner_list)
                 row += 1
+
+        self.total_enemies = sum(len(row) for row in self.enemy_array)
 
     def clean_dead_enemies(self):
         self.enemy_array = [
@@ -107,6 +143,24 @@ class Invaders:
         ]
         for row in self.enemy_array:
             row[:] = [enemy for enemy in row if not enemy.is_dead]
+
+    def enemy_shoot(self):
+        for row in self.enemy_array:
+            for enemy in row:
+                if enemy.shoot_chance():
+                    laser = Laser(
+                        enemy.x + enemy.get_width(), enemy.y + enemy.get_height(), LASER
+                    )
+                    self.enemy_laser_array.append(laser)
+
+    def move_enemy_lasers(self):
+        for laser in self.enemy_laser_array:
+            laser.move(-2)
+            if laser.off_screen(HEIGHT):
+                self.enemy_laser_array.remove(laser)
+            elif laser.is_collision(self.player):
+                self.player.lives -= 1
+                self.enemy_laser_array.remove(laser)
 
 
 class Laser:
@@ -205,7 +259,7 @@ class Player(Ship):
         if keys[pygame.K_SPACE]:
             self.shoot()
 
-    def move_lasers(self, vel, objs):
+    def move_lasers(self, vel, objs, game):
         self.cooldown()
         for laser in self.lasers:
             laser.move(vel)
@@ -216,26 +270,27 @@ class Player(Ship):
                     for obj in row:
                         if laser.is_collision(obj):
                             obj.is_dead = True
+                            game.score += obj.score_value
                             if laser in self.lasers:
-                                self.lasers.remove(laser)  #
+                                self.lasers.remove(laser)
                             break
-
-    def lives(self):
-        pass
 
 
 class Enemy(Ship):
-    def __init__(self, x, y, enemy_type):
+    def __init__(self, x, y, enemy_type, score_value):
         super().__init__(x, y)
         self.ship_img = enemy_type
+        self.score_value = score_value
         self.mask = pygame.mask.from_surface(self.ship_img)
 
     def move(self):
-        if self.x - ENEMY_VEL + self.ship_img.get_width() + 10 < WIDTH:
-            self.x += ENEMY_VEL
+        if self.x - ENEMY_VEL_BASE + self.ship_img.get_width() + 10 < WIDTH:
+            self.x += ENEMY_VEL_BASE
 
     def shoot_chance(self):
-        return random.random() < 0.10
+        if random.randrange(0, 110 * FPS) == 1:
+            return True
+        return False
 
 
 def main():
