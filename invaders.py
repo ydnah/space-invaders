@@ -1,4 +1,5 @@
 import os
+import random
 
 import pygame
 
@@ -9,6 +10,8 @@ pygame.font.init()
 WIDTH, HEIGHT = 500, 500
 PLAYER_VEL = 5
 ENEMY_VEL = 1
+
+FPS = 60
 
 # Enemies
 CRAB = pygame.image.load(os.path.join("assets", "space__0002_B1.png"))
@@ -41,6 +44,8 @@ class Invaders:
     def update(self):
         self.player.controls()
         self.move_enemies()
+        self.player.move_lasers(2, self.enemy_array)
+        self.clean_dead_enemies()
 
     def move_enemies(self):
         move_down = False
@@ -63,6 +68,10 @@ class Invaders:
             f"score< {self.score} >", 1, (255, 255, 255)
         )
         self.display.blit(level_label, (10, 10))
+
+        pygame.draw.line(
+            self.display, (255, 255, 255), (0, HEIGHT - 70), (WIDTH, HEIGHT - 70), 2
+        )
 
         self.player.draw(self.display)
 
@@ -91,8 +100,15 @@ class Invaders:
                     inner_list.append(Enemy(x_position, y_position, enemy))
                 self.enemy_array.append(inner_list)
                 row += 1
-        
-        
+
+    def clean_dead_enemies(self):
+        self.enemy_array = [
+            row for row in self.enemy_array if any(not enemy.is_dead for enemy in row)
+        ]
+        for row in self.enemy_array:
+            row[:] = [enemy for enemy in row if not enemy.is_dead]
+
+
 class Laser:
     def __init__(self, x, y, img):
         self.x = x
@@ -104,10 +120,10 @@ class Laser:
         window.blit(self.img, (self.x, self.y))
 
     def move(self, vel):
-        self.y += vel
+        self.y -= vel
 
     def off_screen(self, height):
-        return self.y <= height and self.y >= 0
+        return not (self.y <= height and self.y >= 0)
 
     def collide(self, obj1, obj2):
         offset_x = obj2.x - obj1.x
@@ -119,14 +135,21 @@ class Laser:
 
 
 class Ship:
+    COOLDOWN = FPS // 2
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
         self.ship_img = None
         self.laser_img = None
+        self.lasers = []
+        self.cool_down_counter = 0
+        self.is_dead = False
 
     def draw(self, window):
         window.blit(self.ship_img, (self.x, self.y))
+        for laser in self.lasers:
+            laser.draw(window)
 
     def get_width(self):
         return self.ship_img.get_width()
@@ -134,8 +157,30 @@ class Ship:
     def get_height(self):
         return self.ship_img.get_height()
 
+    def move_lasers(self, vel, obj):
+        self.cooldown()
+        for laser in self.lasers:
+            laser.move(vel)
+            if laser.off_screen(HEIGHT):
+                self.lasers.remove(laser)
+            elif laser.is_collision(obj):
+                self.lasers.remove(laser)
+
+    def cooldown(self):
+        if self.cool_down_counter >= self.COOLDOWN:
+            self.cool_down_counter = 0
+        elif self.cool_down_counter > 0:
+            self.cool_down_counter += 1
+
     def shoot(self):
-        laser = Laser(self.x, self.y, self.laser_img)
+        if self.cool_down_counter == 0:
+            laser = Laser(
+                self.x + 12,
+                self.y,
+                self.laser_img,
+            )
+            self.lasers.append(laser)
+            self.cool_down_counter = 1
 
 
 class Player(Ship):
@@ -157,10 +202,26 @@ class Player(Ship):
             and self.x - PLAYER_VEL + self.ship_img.get_width() + 10 < WIDTH
         ):
             self.x += PLAYER_VEL
-        if (
-            keys[pygame.K_SPACE]
-        ):
+        if keys[pygame.K_SPACE]:
             self.shoot()
+
+    def move_lasers(self, vel, objs):
+        self.cooldown()
+        for laser in self.lasers:
+            laser.move(vel)
+            if laser.off_screen(HEIGHT):
+                self.lasers.remove(laser)
+            else:
+                for row in objs:
+                    for obj in row:
+                        if laser.is_collision(obj):
+                            obj.is_dead = True
+                            if laser in self.lasers:
+                                self.lasers.remove(laser)  #
+                            break
+
+    def lives(self):
+        pass
 
 
 class Enemy(Ship):
@@ -173,12 +234,11 @@ class Enemy(Ship):
         if self.x - ENEMY_VEL + self.ship_img.get_width() + 10 < WIDTH:
             self.x += ENEMY_VEL
 
-    def check_position(self):
-        pass
+    def shoot_chance(self):
+        return random.random() < 0.10
 
 
 def main():
-    FPS = 60
     clock = pygame.time.Clock()
 
     game = Invaders()
