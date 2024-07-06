@@ -74,13 +74,25 @@ class Invaders:
 
     def populate_enemy(self, count=11, start_x=20, start_y=50, spacing=30):
         self.enemy_array = []
-        for i in range(2):
-            inner_list = []
-            for j in range(count):
-                x_position = start_x + j * spacing
-                y_position = start_y + i * spacing
-                inner_list.append(Enemy(x_position, y_position, CRAB))
-            self.enemy_array.append(inner_list)
+        row = 0
+
+        enemy_rows = [
+            (OCTOPUS, 1),
+            (CRAB, 2),
+            (SQUID, 2),
+        ]
+
+        for enemy, rows in enemy_rows:
+            for _ in range(rows):
+                inner_list = []
+                for i in range(count):
+                    x_position = start_x + i * spacing
+                    y_position = start_y + row * spacing
+                    inner_list.append(Enemy(x_position, y_position, enemy))
+                self.enemy_array.append(inner_list)
+                row += 1
+        
+        
 
 
 class Laser:
