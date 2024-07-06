@@ -39,7 +39,7 @@ class Invaders:
                 self.running = False
 
     def update(self):
-        self.player.move()
+        self.player.controls()
         self.move_enemies()
 
     def move_enemies(self):
@@ -93,8 +93,6 @@ class Invaders:
                 row += 1
         
         
-
-
 class Laser:
     def __init__(self, x, y, img):
         self.x = x
@@ -148,7 +146,7 @@ class Player(Ship):
         self.mask = pygame.mask.from_surface(self.ship_img)
         self.lives = 3
 
-    def move(self):
+    def controls(self):
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_LEFT] and self.x - PLAYER_VEL > 0:
@@ -159,6 +157,10 @@ class Player(Ship):
             and self.x - PLAYER_VEL + self.ship_img.get_width() + 10 < WIDTH
         ):
             self.x += PLAYER_VEL
+        if (
+            keys[pygame.K_SPACE]
+        ):
+            self.shoot()
 
 
 class Enemy(Ship):
